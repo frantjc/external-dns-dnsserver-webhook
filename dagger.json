@@ -1,0 +1,8 @@
+{
+  "name": "external-dns-dnsserver-webhook",
+  "engineVersion": "v0.19.6",
+  "sdk": {
+    "source": "go"
+  },
+  "source": ".dagger"
+}
