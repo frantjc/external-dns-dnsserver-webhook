@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/external-dns/provider"
 )
 
-type StandaloneCoreDNSProvider struct {
+type HostsFileProvider struct {
 	provider.BaseProvider
 	sync.Mutex
 	File string
@@ -24,9 +24,9 @@ type StandaloneCoreDNSProvider struct {
 	Endpoints []*endpoint.Endpoint
 }
 
-var _ provider.Provider = &StandaloneCoreDNSProvider{}
+var _ provider.Provider = &HostsFileProvider{}
 
-func (p *StandaloneCoreDNSProvider) Records(ctx context.Context) ([]*endpoint.Endpoint, error) {
+func (p *HostsFileProvider) Records(ctx context.Context) ([]*endpoint.Endpoint, error) {
 	if p == nil || p.Endpoints == nil {
 		return []*endpoint.Endpoint{}, nil
 	}
@@ -34,7 +34,7 @@ func (p *StandaloneCoreDNSProvider) Records(ctx context.Context) ([]*endpoint.En
 	return p.Endpoints, nil
 }
 
-func (p *StandaloneCoreDNSProvider) ApplyChanges(ctx context.Context, changes *plan.Changes) error {
+func (p *HostsFileProvider) ApplyChanges(ctx context.Context, changes *plan.Changes) error {
 	if p == nil {
 		return fmt.Errorf("nil provider")
 	} else if p.Endpoints == nil {

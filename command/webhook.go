@@ -16,7 +16,7 @@ import (
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/coremain"
-	"github.com/coredns/coredns/plugin/pkg/log"
+	corednslog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/frantjc/external-dns-dnsserver-webhook/externaldns"
 	"github.com/frantjc/external-dns-dnsserver-webhook/hosts"
 	xurl "github.com/frantjc/x/net/url"
@@ -31,20 +31,19 @@ func NewWebhook(version string) *cobra.Command {
 		dnsCache                                                       string
 		dnsForwardServers                                              []string
 		initialHosts                                                   string
-		verbosity int
+		verbosity                                                      int
 		cmd                                                            = &cobra.Command{
-			Use: "webhook",
+			Use:           "webhook",
 			SilenceErrors: true,
-			SilenceUsage: true,
-			Version: version,
+			SilenceUsage:  true,
+			Version:       version,
 			RunE: func(cmd *cobra.Command, args []string) error {
 				caddy.AppName = cmd.Name()
 				caddy.AppVersion = cmd.Version
-				log.Discard()
 
 				var (
-					eg, ctx     = errgroup.WithContext(cmd.Context())
-					log         = slog.New(
+					eg, ctx = errgroup.WithContext(cmd.Context())
+					log     = slog.New(
 						slog.NewTextHandler(cmd.OutOrStdout(), &slog.HandlerOptions{
 							Level: slog.Level(verbosity),
 						}),
@@ -55,6 +54,7 @@ func NewWebhook(version string) *cobra.Command {
 				if !log.Enabled(ctx, slog.LevelDebug) {
 					dnsserver.Quiet = true
 					caddy.Quiet = true
+					corednslog.Discard()
 				}
 
 				dnsCacheDuration, err := time.ParseDuration(dnsCache)
@@ -89,7 +89,7 @@ func NewWebhook(version string) *cobra.Command {
 					return err
 				}
 
-				log.Info("parsed initial hosts")
+				log.Info("parsed initial hosts", "len", len(h.Hosts))
 
 				if err := h.Encode(f); err != nil {
 					return err
@@ -153,16 +153,16 @@ func NewWebhook(version string) *cobra.Command {
 
 				mux := http.NewServeMux()
 
-				healthz := func(w http.ResponseWriter, r *http.Request) {
+				z := func(w http.ResponseWriter, r *http.Request) {
 					if !started {
 						w.WriteHeader(http.StatusInternalServerError)
 						return
 					}
 					fmt.Fprintln(w, "ok")
 				}
-				mux.HandleFunc("GET /readyz", healthz)
-				mux.HandleFunc("GET /livez", healthz)
-				mux.HandleFunc("GET /healthz", healthz)
+				mux.HandleFunc("GET /readyz", z)
+				mux.HandleFunc("GET /livez", z)
+				mux.HandleFunc("GET /healthz", z)
 				srv := &http.Server{
 					Addr:              metricsAddr,
 					ReadHeaderTimeout: time.Second * 5,
@@ -186,7 +186,7 @@ func NewWebhook(version string) *cobra.Command {
 				})
 
 				api.StartHTTPApi(
-					&externaldns.StandaloneCoreDNSProvider{
+					&externaldns.HostsFileProvider{
 						Hosts: h,
 						File:  f.Name(),
 					},
