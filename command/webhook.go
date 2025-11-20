@@ -19,6 +19,7 @@ import (
 	corednslog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/frantjc/external-dns-dnsserver-webhook/externaldns"
 	"github.com/frantjc/external-dns-dnsserver-webhook/hosts"
+	"github.com/frantjc/external-dns-dnsserver-webhook/internal/logutil"
 	xurl "github.com/frantjc/x/net/url"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -27,6 +28,7 @@ import (
 
 func NewWebhook(version string) *cobra.Command {
 	var (
+		slogConfig = new(logutil.SlogConfig)
 		port, metricsPort, dnsHealthPort, dnsReadyPort, dnsMetricsPort int
 		dnsCache                                                       string
 		dnsForwardServers                                              []string
@@ -37,6 +39,12 @@ func NewWebhook(version string) *cobra.Command {
 			SilenceErrors: true,
 			SilenceUsage:  true,
 			Version:       version,
+			PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+				handler := slog.NewTextHandler(cmd.OutOrStdout(), &slog.HandlerOptions{
+					Level: slogConfig,
+				})
+				cmd.SetContext(logutil.SloggerInto(cmd.Context(), slog.New(handler)))
+			},
 			RunE: func(cmd *cobra.Command, args []string) error {
 				caddy.AppName = cmd.Name()
 				caddy.AppVersion = cmd.Version
@@ -161,7 +169,6 @@ func NewWebhook(version string) *cobra.Command {
 					fmt.Fprintln(w, "ok")
 				}
 				mux.HandleFunc("GET /readyz", z)
-				mux.HandleFunc("GET /livez", z)
 				mux.HandleFunc("GET /healthz", z)
 				srv := &http.Server{
 					Addr:              metricsAddr,
@@ -205,7 +212,7 @@ func NewWebhook(version string) *cobra.Command {
 	cmd.Flags().Bool("version", false, "Version for "+cmd.Name())
 	cmd.SetVersionTemplate("{{ .Name }}{{ .Version }} coredns" + coremain.CoreVersion + " " + runtime.Version() + "\n")
 
-	cmd.Flags().CountVarP(&verbosity, "verbose", "v", fmt.Sprintf("Verbosity for %s.", cmd.Name()))
+	slogConfig.AddFlags(cmd.PersistentFlags())
 
 	cmd.Flags().StringVar(&dnsserver.Port, "dns-port", dnsserver.DefaultPort, "DNS port")
 	cmd.Flags().IntVar(&dnsMetricsPort, "dns-metrics-port", 8181, "DNS metrics port")
