@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -81,15 +82,17 @@ func NewWebhook(version string) *cobra.Command {
 
 				log.Info("hosts file " + f.Name())
 
-				g := new(bytes.Buffer)
+				var g io.Reader = new(bytes.Buffer)
 				if initialHosts != "" {
-					g, err := xurl.OpenContext(ctx, initialHosts)
+					h, err := xurl.OpenContext(ctx, initialHosts)
 					if err != nil {
 						return err
 					}
-					defer g.Close()
+					defer h.Close()
 
 					log.Info("opened initial hosts " + initialHosts)
+
+					g = h
 				}
 
 				h, err := hosts.Decode(g)
