@@ -28,7 +28,7 @@ import (
 
 func NewWebhook(version string) *cobra.Command {
 	var (
-		slogConfig = new(logutil.SlogConfig)
+		slogConfig                                                     = new(logutil.SlogConfig)
 		port, metricsPort, dnsHealthPort, dnsReadyPort, dnsMetricsPort int
 		dnsCache                                                       string
 		dnsForwardServers                                              []string
