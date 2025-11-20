@@ -94,7 +94,7 @@ func (m *ExternalDnsDnsserverWebhook) Container(ctx context.Context) *dagger.Con
 			dagger.ContainerWithFileOpts{Expand: true, Owner: owner, Permissions: 0700}).
 		WithExec([]string{"chown", "-R", owner, home}).
 		WithUser(user).
-		WithEntrypoint([]string{"sindri"})
+		WithEntrypoint([]string{"webhook"})
 }
 
 func (m *ExternalDnsDnsserverWebhook) Version(ctx context.Context) string {
