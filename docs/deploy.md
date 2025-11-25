@@ -8,7 +8,7 @@ provider:
   webhook:
     image:
       repository: ghcr.io/frantjc/external-dns-dnsserver-webhook
-      tag: 0.1.1
+      tag: 0.1.4
     args:
       - --debug
       - --dns-port=5353
