@@ -1,0 +1,54 @@
+let semverPattern: Regexp! = `^v?\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$`
+
+"""
+a semantic version: vX.Y.Z[-prerelease][+metadata], where the v is optional and is kept if present
+"""
+scalar Semver {
+  new(raw: String!) {
+    if (!raw.containsMatch(semverPattern)) {
+      raise `invalid semantic version: ${raw}`
+    }
+    raw
+  }
+
+  """
+  the version as constructed, keeping its leading "v" if it had one
+  """
+  original: String! {
+    self :: String!
+  }
+
+  """
+  the version without its leading "v"
+  """
+  string: String! {
+    (self :: String!).trimPrefix("v")
+  }
+
+  """
+  the major version
+  """
+  major: String! {
+    let parts = (self :: String!).trimPrefix("v").split(".", 3)
+    parts[0] ?? ""
+  }
+
+  """
+  the minor version
+  """
+  minor: String! {
+    let parts = (self :: String!).trimPrefix("v").split(".", 3)
+    parts[1] ?? ""
+  }
+
+  """
+  the prerelease identifier without its leading "-", or "" if there is none
+  """
+  prerelease: String! {
+    let match = (self :: String!).match(semverPattern)
+    if (match == null) {
+      raise `invalid semantic version: ${self :: String!}`
+    }
+    (match.captures[0] ?? "").trimPrefix("-")
+  }
+}

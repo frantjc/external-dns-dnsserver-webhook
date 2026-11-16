@@ -1,0 +1,124 @@
+let gid: String! = "1001"
+let uid: String! = gid
+let group: String! = "webhook"
+let user: String! = group
+let owner: String! = user + ":" + group
+let home: String! = "/home/" + user
+
+let registry: String! = "ghcr.io"
+let repo: String! = "frantjc/external-dns-dnsserver-webhook"
+
+"""
+Builds and releases external-dns-dnsserver-webhook. Formatting, vetting and
+testing are the checks of the go module that the workspace installs.
+"""
+type ExternalDnsDnsserverWebhook {
+  let ws: Workspace!
+
+  new(ws: Workspace!) {
+    self.ws = ws
+    self
+  }
+
+  """
+  The latest release tag, or HEAD when there isn't one.
+  """
+  let latest: GitRef! {
+    # WorkspaceGit can't look up releases, so do so in its full-history .git
+    # directory. Tags move, so skip the lockfile.
+    directory.withDirectory(".git", ws.git.directory).asGit.latest(noLock: true)
+  }
+
+  """
+  The webhook binary in a minimal container, running as an unprivileged user.
+  """
+  container: Container! {
+    wolfi
+      .container
+      .withExec(["addgroup", "-S", "-g", gid, group])
+      .withExec(["adduser", "-S", "-G", group, "-u", uid, user])
+      .withEnvVariable("PATH", home + "/.local/bin:$PATH", expand: true)
+      .withFile(home + "/.local/bin/webhook", binary, expand: true, owner: owner, permissions: 448)
+      .withExec(["chown", "-R", owner, home])
+      .withUser(user)
+      .withWorkdir(home)
+      .withEntrypoint(["webhook"])
+  }
+
+  """
+  Builds the container.
+  """
+  build: Void @check {
+    container.sync
+    null
+  }
+
+  """
+  The version of the source: the latest tag, suffixed with the short HEAD
+  commit when HEAD isn't that tag and with +dirty when there are uncommitted
+  changes.
+  """
+  version: Semver! {
+    let git = ws.git
+
+    # latest falls back to HEAD when there's no release tag.
+    let ref = { latest.ref } rescue { e: Error => "" }
+    let v = "v0.0.0-unknown"
+    if (ref.hasPrefix("refs/tags/")) {
+      v = ref.trimPrefix("refs/tags/")
+    }
+
+    let suffix = {
+      let head = git.head.commit
+      if (head != latest.commit) "-" + head.truncate(7) else ""
+    } rescue {
+      e: Error => ""
+    }
+    v += suffix
+
+    let clean = { git.uncommitted.isEmpty } rescue { e: Error => true }
+    if (!clean) {
+      v += "+dirty"
+    }
+
+    Semver(v)
+  }
+
+  """
+  The webhook binary.
+  """
+  binary: File! {
+    go(ws, gitignore: true)
+      .build(pkg: "./cmd/webhook", ldflags: "-s -w -X main.version=" + version.original)
+  }
+
+  """
+  Releases HEAD, which must be a clean checkout of the latest release tag:
+  publishes the container to ghcr.io/frantjc/external-dns-dnsserver-webhook
+  and creates the tag's GitHub release. A prerelease is tagged only with its
+  version; any other release also with its major.minor, its major and latest.
+  Returns the published references.
+  """
+  ship(githubToken: Secret!): [String!]! {
+    let v = version
+    let raw = v.original
+    # latest is HEAD when there's no release tag, hence the unknown check.
+    if (ws.git.head.commit != latest.commit or raw.hasPrefix("v0.0.0-unknown") or raw.hasSuffix("+dirty")) {
+      raise `HEAD is not a clean checkout of a release tag: ${raw}`
+    }
+
+    # Image tags can't contain build metadata.
+    let tag = v.string.split("+", limit: 2)[0] ?? ""
+    let prerelease = v.prerelease != ""
+    let tags = if (prerelease) [tag] else [tag, `${v.major}.${v.minor}`, v.major, "latest"]
+
+    let image = container.withRegistryAuth(registry, "x-access-token", githubToken)
+    let refs = tags.map { t => image.publish(`${registry}/${repo}:${t}`) }
+
+    gh(githubToken)
+      .release(repo: repo, tag: raw)
+      .create(generateNotes: true, latest: !prerelease, prerelease: prerelease)
+
+    refs
+  }
+}

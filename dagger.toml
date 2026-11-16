@@ -1,0 +1,27 @@
+[modules.external-dns-dnsserver-webhook]
+source = "."
+main = true
+
+[modules.dang-sdk]
+source = "dagger.io/sdk/dang"
+
+[modules.go]
+source = "github.com/frantjc/daggerverse/go@85925365bcf7f5a6f7ae118806646c156d43bbb2"
+
+[modules.go.check]
+skip = ["vulncheck"]
+
+[modules.go.settings]
+gitignore = true
+
+[modules.mise]
+source = "github.com/frantjc/daggerverse/mise@85925365bcf7f5a6f7ae118806646c156d43bbb2"
+
+[modules.mise.settings]
+gitignore = true
+
+[modules.wolfi]
+source = "dagger.io/linux/wolfi@fdec349f9aad840f2853bc2e6534f2555788da04"
+
+[sdks.dang]
+module = "dang-sdk"

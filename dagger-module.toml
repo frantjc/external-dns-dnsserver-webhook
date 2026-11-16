@@ -1,0 +1,18 @@
+name = "external-dns-dnsserver-webhook"
+engineVersion = "v1.0.0-beta.26"
+source = ".dagger"
+
+[runtime]
+  source = "dang"
+
+[[dependencies]]
+  name = "gh"
+  source = "github.com/frantjc/daggerverse/gh@85925365bcf7f5a6f7ae118806646c156d43bbb2"
+
+[[dependencies]]
+  name = "go"
+  source = "github.com/frantjc/daggerverse/go@85925365bcf7f5a6f7ae118806646c156d43bbb2"
+
+[[dependencies]]
+  name = "wolfi"
+  source = "dagger.io/linux/wolfi@fdec349f9aad840f2853bc2e6534f2555788da04"

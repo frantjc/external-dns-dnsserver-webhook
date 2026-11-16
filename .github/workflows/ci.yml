@@ -3,22 +3,23 @@ on:
   workflow_dispatch: {}
   push:
     branches:
-      - main
-  pull_request:
-    branches:
-      - main
-permissions:
-  contents: read
+      - "**"
+env:
+  DAGGER_NO_NAG: "1"
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   ci:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
     steps:
-      - uses: actions/checkout@v5
-      - uses: dagger/dagger-for-github@v8.2.0
-        env:
-          DAGGER_NO_NAG: 1
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
         with:
-          shell: |
-            fmt --check &
-            test &
-            .wait
+          install_args: dagger
+      - name: Dagger check
+        run: dagger check

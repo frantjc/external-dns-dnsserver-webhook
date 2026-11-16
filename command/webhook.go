@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/coredns/caddy"
@@ -31,9 +30,7 @@ func NewWebhook(version string) *cobra.Command {
 	var (
 		slogConfig                                                     = new(logutil.SlogConfig)
 		port, metricsPort, dnsHealthPort, dnsReadyPort, dnsMetricsPort int
-		dnsCache                                                       string
-		dnsForwardServers                                              []string
-		initialHosts                                                   string
+		initialHosts, corefilePath                                     string
 		verbosity                                                      int
 		cmd                                                            = &cobra.Command{
 			Use:           "webhook",
@@ -65,14 +62,6 @@ func NewWebhook(version string) *cobra.Command {
 					caddy.Quiet = true
 					corednslog.Discard()
 				}
-
-				dnsCacheDuration, err := time.ParseDuration(dnsCache)
-				if err != nil {
-					return err
-				}
-
-				log.Info("DNS cache seconds " + fmt.Sprint(int(dnsCacheDuration.Seconds())))
-				log.Info("DNS forward servers " + strings.Join(dnsForwardServers, ", "))
 
 				f, err := os.CreateTemp("", "hosts-*")
 				if err != nil {
@@ -112,37 +101,39 @@ func NewWebhook(version string) *cobra.Command {
 					return err
 				}
 
+				directives := defaultDirectives
+				if corefilePath != "" {
+					c, err := xurl.OpenContext(ctx, corefilePath)
+					if err != nil {
+						return err
+					}
+					defer c.Close()
+
+					b, err := io.ReadAll(c)
+					if err != nil {
+						return err
+					}
+					directives = string(b)
+
+					log.Info("read Corefile directives from " + corefilePath)
+				}
+
+				contents := corefile(corefileOpts{
+					readyPort:   dnsReadyPort,
+					healthPort:  dnsHealthPort,
+					metricsPort: dnsMetricsPort,
+					hostsFile:   f.Name(),
+					directives:  directives,
+				})
+
+				log.Debug("Corefile\n" + contents)
+
 				if _, err = caddy.Start(caddy.CaddyfileInput{
 					Filepath:       "Corefile",
 					ServerTypeName: "dns",
-					Contents: []byte(fmt.Sprintf(
-						`. {
-  ready :%d
-  health :%d {
-    lameduck 5s
-  }
-  prometheus :%d
-  header {
-    response set ra
-  }
-  hosts %s {
-    fallthrough
-  }
-  forward . %s
-  cache %d
-  loop
-  loadbalance
-}
-`,
-						dnsReadyPort,
-						dnsHealthPort,
-						dnsMetricsPort,
-						f.Name(),
-						strings.Join(dnsForwardServers, " "),
-						int(dnsCacheDuration.Seconds()),
-					)),
+					Contents:       []byte(contents),
 				}); err != nil {
-					return err
+					return fmt.Errorf("start DNS server: %w", err)
 				}
 				defer caddy.Stop() //nolint:errcheck
 
@@ -222,10 +213,8 @@ func NewWebhook(version string) *cobra.Command {
 	cmd.Flags().IntVar(&dnsHealthPort, "dns-health-port", 8282, "DNS health port")
 	cmd.Flags().IntVar(&dnsReadyPort, "dns-ready-port", 9153, "DNS ready port")
 
-	cmd.Flags().StringVar(&dnsCache, "dns-cache", "30s", "DNS cache time")
-	cmd.Flags().StringSliceVar(&dnsForwardServers, "dns-forward-server", []string{"1.1.1.2", "1.1.1.1", "8.8.8.8", "8.8.4.4"}, "DNS servers to forward to after fallthrough")
-
 	cmd.Flags().StringVar(&initialHosts, "init-hosts", "", "Initial hosts file")
+	cmd.Flags().StringVar(&corefilePath, "corefile", "", "Corefile directives to add to the managed server block, replacing the defaults, e.g. forward and cache")
 
 	cmd.Flags().IntVar(&metricsPort, "metrics-port", 8080, "Metrics port")
 	cmd.Flags().IntVar(&port, "port", 8888, "Port")

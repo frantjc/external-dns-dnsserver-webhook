@@ -1,0 +1,11 @@
+# Answer recursively for names that aren't in the hosts file.
+header {
+  response set ra
+}
+forward . 1.1.1.2 1.1.1.1 8.8.8.8 8.8.4.4
+# Keep answering from expired entries while the upstreams are unreachable.
+cache 30 {
+  serve_stale
+}
+loop
+loadbalance
